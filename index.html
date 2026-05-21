@@ -333,7 +333,6 @@
         <div class="navbar">
             <div class="nav-info-container">
                 <h2 id="welcome-text" style="margin:0;">Welcome</h2>
-                <!-- Dynamic Discrepancy Indicator Display -->
                 <div id="navbar-variance-panel" style="font-size: 20px; font-weight: bold; margin-top: 5px;"></div>
             </div>
             <div class="nav-buttons">
@@ -347,7 +346,6 @@
         <!-- 02. DATA ENTRY VIEW -->
         <div id="entry-view" class="app-view active-view">
             
-            <!-- Deposit / Withdrawal Toggle Buttons -->
             <div class="toggle-group">
                 <button id="btn-dep" class="toggle-btn active-deposit" onclick="setMode('deposit')">Deposit</button>
                 <button id="btn-wit" class="toggle-btn" onclick="setMode('withdrawal')">Withdrawal</button>
@@ -367,7 +365,6 @@
                 <ul id="from-suggests" class="suggestions-list" style="display:none;"></ul>
             </div>
 
-            <!-- To & LKR Dynamic Inputs -->
             <div class="row-box" id="row-box-container">
                 <label id="lbl-03" style="color: #c0392b;"><strong>(03) & (04) Betting Site සහ LKR මුදල</strong></label>
                 <p style="font-size: 13px; color: #666; margin-top: 2px;">අදාළ අංකයේ බටන් එකට ගැලපෙන මුදල ඇතුළත් කරන්න.</p>
@@ -421,7 +418,6 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <h3 style="margin:0;">Saved Database Records</h3>
                 
-                <!-- Advanced Live Search Input Block -->
                 <div class="search-container autocomplete" style="margin:0;">
                     <strong style="font-size:14px; color:#333;">Search Ledger:</strong>
                     <input type="text" id="db-search-input" placeholder="Type Name, Bank, Site, LKR..." oninput="showSuggestions('db-search-input', 'db-search-suggests', 'namePhone'); filterDatabaseBySearch();" style="padding:8px; width:220px; border:1px solid #ccc; border-radius:4px;">
@@ -451,7 +447,6 @@
                 </table>
             </div>
 
-            <!-- Dynamic Personal Ledger Output Window -->
             <div id="personal-ledger-box" class="ledger-box" style="display:none;">
                 <h4 id="ledger-title" style="margin-top:0; color:var(--primary); text-decoration:underline;">Personal Financial Summary</h4>
                 <div class="ledger-grid">
@@ -479,7 +474,6 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:15px;">
                 <h3 style="margin:0;">Live Balance Sheet</h3>
                 
-                <!-- Manual Checkpoint Balance Configuration Widget -->
                 <div style="background:#eef2f3; padding:10px 15px; border-radius:6px; border:1px solid #dcdde1; display:flex; align-items:center; gap:10px;">
                     <strong style="font-size:14px; color:var(--dark);">Manual Balance:</strong>
                     <input type="number" id="manual-checkpoint-input" placeholder="Enter System Cash LKR" style="padding:6px; border:1px solid #ccc; border-radius:4px; width:160px;">
@@ -516,13 +510,11 @@
                 </div>
             </div>
 
-            <!-- Dynamic Aggregate Balance Card Deck -->
             <div class="balance-card net-positive" style="margin-bottom:0;">
                 <h4>Actual Hand-on Balance (ඇත්තටම ළඟ ඇති මුදල)</h4>
                 <p style="font-size:12px; color:#555;">(Accounts Total + Mulu Naya) - Pending Deposits - Pending Withdrawals</p>
                 <h2 id="actual-net-balance" style="color: var(--success); font-size: 32px; margin-top: 10px; margin-bottom:0;">0.00 LKR</h2>
                 
-                <!-- Category Segregation Panel -->
                 <div class="group-breakdown">
                     <div class="group-card" style="border-left-color:#27ae60;">
                         <span style="font-size:13px; color:#666; font-weight:600;">BANKS Total</span>
@@ -537,7 +529,6 @@
         </div>
     </div>
 
-    <!-- Details Modal with Direct Record Configuration Routing Actions -->
     <div id="details-modal">
         <div class="modal-content">
             <h3 id="modal-title" style="margin-top:0; color: var(--primary);">Details</h3>
@@ -560,12 +551,11 @@
         </div>
     </div>
 
-    <!-- Firebase SDK Modules Integration Links -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    <!-- Firebase SDK Compat versions for running without a server -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
-        // Your web app's Firebase configuration
+    <script>
         const firebaseConfig = {
             apiKey: "AIzaSyCAt-y8Xls79cOYP9Hdaq81WVkmk7bLA4U",
             authDomain: "dana1234567.firebaseapp.com",
@@ -577,11 +567,9 @@
             measurementId: "G-ZDCQ2Q9EF6"
         };
 
-        // Initialize Firebase Realtime Instance
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-        // System Core Data State Arrays
         let records = [];
         let manualBalances = {};
         let checkpointBalance = 0;
@@ -589,13 +577,12 @@
         let editIndex = null;
         let currentOpenStatusType = null; 
 
-        // Predefined Target Categorization Mapping Indexes
         const bankAccounts = ["sampath bank", "peoples bank", "lolc bank", "lb bank", "ez cash", "dialog bank"];
         const bettingAccounts = ["1xbet", "888", "db bet", "melbet", "web", "1xbet web"];
         const fixedAccounts = [...bankAccounts, ...bettingAccounts, "mulu naya"];
 
         // --- Realtime Firebase Database Listeners ---
-        onValue(ref(db, 'biz_records'), (snapshot) => {
+        db.ref('biz_records').on('value', (snapshot) => {
             records = snapshot.val() || [];
             renderDatabase();
             if(document.getElementById('database-view').classList.contains('active-view')) {
@@ -604,19 +591,18 @@
             renderBalances();
         });
 
-        onValue(ref(db, 'biz_manual_bal'), (snapshot) => {
+        db.ref('biz_manual_bal').on('value', (snapshot) => {
             manualBalances = snapshot.val() || {};
             renderBalances();
         });
 
-        onValue(ref(db, 'biz_checkpoint_bal'), (snapshot) => {
+        db.ref('biz_checkpoint_bal').on('value', (snapshot) => {
             checkpointBalance = parseFloat(snapshot.val()) || 0;
             const chkInput = document.getElementById('manual-checkpoint-input');
             if (chkInput) chkInput.value = checkpointBalance || '';
             renderBalances();
         });
 
-        // UI View Mode Adjuster Engine
         function setMode(mode) {
             currentMode = mode;
             const lbl02 = document.getElementById('lbl-02');
@@ -656,7 +642,6 @@
             }
         }
 
-        // Authentication Framework Routing Login Method
         function login() {
             const user = document.getElementById('username').value.trim();
             const pass = document.getElementById('password').value;
@@ -688,7 +673,6 @@
             if (viewId === 'balance-view') renderBalances();
         }
 
-        // Structured Suggestion Matrix Generator Engine
         function showSuggestions(inputId, listId, fieldType) {
             const inputVal = document.getElementById(inputId).value.toLowerCase();
             const listEl = document.getElementById(listId);
@@ -732,7 +716,6 @@
             }
         });
 
-        // Core Save Data Controller Endpoint - Connected to Firebase Cloud
         function saveData() {
             const name = document.getElementById('entry-name').value.trim();
             const from = document.getElementById('entry-from').value.trim();
@@ -745,7 +728,6 @@
             const status = document.getElementById('entry-status').value;
             const note = document.getElementById('entry-note').value;
 
-            // Updated Validation Logic: Allow save if at least one field contains data
             if (!name && !from && !to1 && lkr1 === 0 && !to2 && lkr2 === 0 && !to3 && lkr3 === 0 && !note) {
                 alert("කරුණාකර එක් දත්තයක් හෝ ඇතුළත් කරන්න (Please enter at least one field to save)!");
                 return;
@@ -773,7 +755,7 @@
                 records.push(record);
             }
 
-            set(ref(db, 'biz_records'), records).then(() => {
+            db.ref('biz_records').set(records).then(() => {
                 clearForm();
                 switchView('database-view');
             }).catch((err) => alert("Cloud Sync Failed: " + err.message));
@@ -793,7 +775,6 @@
             editIndex = null;
         }
 
-        // Render Database Records View Window Engine 
         function renderDatabase() {
             const tbody = document.getElementById('database-body');
             tbody.innerHTML = '';
@@ -851,11 +832,10 @@
         function deleteRecord(idx) {
             if(confirm("Are you certain you want to permanently delete this record?")) {
                 records.splice(idx, 1);
-                set(ref(db, 'biz_records'), records);
+                db.ref('biz_records').set(records);
             }
         }
 
-        // Live Filtering & Individual Dynamic Ledger Generation Engine
         function filterDatabaseBySearch() {
             const val = document.getElementById('db-search-input').value.trim().toLowerCase();
             const tbody = document.getElementById('database-body');
@@ -873,7 +853,6 @@
             let currentTargetName = '';
 
             records.forEach((r, idx) => {
-                // Multi-Field Global search: matches Name, From, To accounts, LKR amounts, Status and Notes
                 const nameMatch = r.name && r.name.toLowerCase().includes(val);
                 const fromMatch = r.from && r.from.toLowerCase().includes(val);
                 const to1Match = r.to1 && r.to1.toLowerCase().includes(val);
@@ -928,7 +907,6 @@
             renderDatabase();
         }
 
-        // Live Balance Sheet Matrix Processor Engine
         function renderBalances() {
             let runningBalances = {};
             fixedAccounts.forEach(acc => {
@@ -984,7 +962,6 @@
                 const card = document.createElement('div');
                 card.className = `balance-card cursor-pointer ${bal >= 0 ? 'net-positive' : ''}`;
                 card.style.borderTopColor = cleanBankMarker ? 'var(--success)' : 'var(--orange)';
-                // Account cards click routing integration
                 card.innerHTML = `
                     <div onclick="openDetails('${acc}')">
                         <h5 style="text-transform: capitalize; margin:0 0 8px 0;">${acc} (Click Details)</h5>
@@ -1020,7 +997,7 @@
 
         function saveManualCheckpoint() {
             const val = parseFloat(document.getElementById('manual-checkpoint-input').value) || 0;
-            set(ref(db, 'biz_checkpoint_bal'), val).then(() => {
+            db.ref('biz_checkpoint_bal').set(val).then(() => {
                 checkpointBalance = val;
                 renderBalances();
             });
@@ -1028,16 +1005,14 @@
 
         function updateManualBalance(account, val) {
             manualBalances[account.toLowerCase()] = parseFloat(val) || 0;
-            set(ref(db, 'biz_manual_bal'), manualBalances);
+            db.ref('biz_manual_bal').set(manualBalances);
         }
 
-        // Modal Component Dynamic Injection Methods
         function openDetails(statusType) {
             currentOpenStatusType = statusType;
             const modal = document.getElementById('details-modal');
             const modalBody = document.getElementById('modal-body');
             
-            // Check if it's a generic pending status type or a fixed bank/site account profile drill-down
             const isGenericStatusProfile = ['Nayata', 'Pending Deposit', 'Pending Withdrawal'].includes(statusType);
             
             document.getElementById('modal-title').innerText = isGenericStatusProfile ? `${statusType} Breakdown Profile` : `${statusType.toUpperCase()} Account Ledger Logs`;
@@ -1054,7 +1029,6 @@
                         calculatedDisplayAmount = (r.lkr1 || 0) + (r.lkr2 || 0) + (r.lkr3 || 0);
                     }
                 } else {
-                    // Filter matching logs related to specific bank or betting account
                     const checkAccName = statusType.toLowerCase();
                     let accountSpecificSum = 0;
                     let hasAccountInvolvement = false;
@@ -1083,7 +1057,6 @@
                         actionHtmlBlock = `<div style="font-size:12px; font-weight:bold; color:var(--primary); margin-bottom:6px;">Status: ${r.status}</div>`;
                     }
 
-                    // Append Edit & Delete Buttons inline
                     const editBtn = `<button onclick="editFromModal(${idx})" style="padding:5px 8px; background:#f39c12; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:4px;">Edit</button>`;
                     const delBtn = `<button onclick="deleteFromModal(${idx}, '${statusType}')" style="padding:5px 8px; background:#e74c3c; color:white; border:none; border-radius:4px; cursor:pointer;">Del</button>`;
                     actionHtmlBlock += `<div>${editBtn}${delBtn}</div>`;
@@ -1113,12 +1086,11 @@
 
         function clearStatusDirect(idx) {
             records[idx].status = 'Yes';
-            set(ref(db, 'biz_records'), records).then(() => {
+            db.ref('biz_records').set(records).then(() => {
                 if (currentOpenStatusType) openDetails(currentOpenStatusType);
             });
         }
 
-        // Functions to Handle Actions Directly from Modals
         function editFromModal(idx) {
             closeModal();
             editRecord(idx);
@@ -1127,30 +1099,11 @@
         function deleteFromModal(idx, statusType) {
             if(confirm("Are you certain you want to permanently delete this record?")) {
                 records.splice(idx, 1);
-                set(ref(db, 'biz_records'), records).then(() => {
-                    openDetails(statusType); // Re-render modal to reflect changes
+                db.ref('biz_records').set(records).then(() => {
+                    openDetails(statusType);
                 });
             }
         }
-
-        // Global Variable Mapping Context Routing
-        window.setMode = setMode;
-        window.login = login;
-        window.logout = logout;
-        window.switchView = switchView;
-        window.showSuggestions = showSuggestions;
-        window.saveData = saveData;
-        window.filterDatabaseBySearch = filterDatabaseBySearch;
-        window.clearSearchFilter = clearSearchFilter;
-        window.editRecord = editRecord;
-        window.deleteRecord = deleteRecord;
-        window.saveManualCheckpoint = saveManualCheckpoint;
-        window.updateManualBalance = updateManualBalance;
-        window.openDetails = openDetails;
-        window.closeModal = closeModal;
-        window.clearStatusDirect = clearStatusDirect;
-        window.editFromModal = editFromModal;
-        window.deleteFromModal = deleteFromModal;
     </script>
 </body>
 </html>
