@@ -424,7 +424,7 @@
                 <!-- Advanced Live Search Input Block -->
                 <div class="search-container autocomplete" style="margin:0;">
                     <strong style="font-size:14px; color:#333;">Search Ledger:</strong>
-                    <input type="text" id="db-search-input" placeholder="Type Name or Phone..." oninput="showSuggestions('db-search-input', 'db-search-suggests', 'namePhone'); filterDatabaseBySearch();" style="padding:8px; width:220px; border:1px solid #ccc; border-radius:4px;">
+                    <input type="text" id="db-search-input" placeholder="Type Name, Bank, Site, LKR..." oninput="showSuggestions('db-search-input', 'db-search-suggests', 'namePhone'); filterDatabaseBySearch();" style="padding:8px; width:220px; border:1px solid #ccc; border-radius:4px;">
                     <button onclick="clearSearchFilter()" style="padding:8px 12px; border:none; background:#95a5a6; color:white; border-radius:4px; cursor:pointer; font-weight:bold;">Clear</button>
                     <ul id="db-search-suggests" class="suggestions-list" style="display:none; top:40px;"></ul>
                 </div>
@@ -743,24 +743,40 @@
             const to3 = document.getElementById('entry-to-3').value.trim();
             const lkr3 = parseFloat(document.getElementById('entry-lkr-3').value) || 0;
             const status = document.getElementById('entry-status').value;
-            const note = document.getElementById('entry-note').value.trim();
+            const note = document.getElementById('entry-note').value;
 
-            const timestamp = editIndex !== null ? records[editIndex].timestamp : new Date().toLocaleString();
-            const newRecord = { timestamp, name, from, to1, lkr1, to2, lkr2, to3, lkr3, status, note, mode: currentMode };
-
-            if (editIndex !== null) {
-                records[editIndex] = newRecord;
-                editIndex = null;
-                alert("Record Updated Successfully!");
-            } else {
-                records.push(newRecord);
-                alert("Record Saved Successfully!");
+            // Updated Validation Logic: Allow save if at least one field contains data
+            if (!name && !from && !to1 && lkr1 === 0 && !to2 && lkr2 === 0 && !to3 && lkr3 === 0 && !note) {
+                alert("කරුණාකර එක් දත්තයක් හෝ ඇතුළත් කරන්න (Please enter at least one field to save)!");
+                return;
             }
 
-            // Sync with Firebase Node
-            set(ref(db, 'biz_records'), records);
-            clearForm();
-            switchView('database-view');
+            const record = {
+                date: editIndex !== null ? records[editIndex].date : new Date().toLocaleString(),
+                type: currentMode,
+                name: name,
+                from: from.toLowerCase(),
+                to1: to1.toLowerCase(),
+                lkr1: lkr1,
+                to2: to2.toLowerCase(),
+                lkr2: lkr2,
+                to3: to3.toLowerCase(),
+                lkr3: lkr3,
+                status: status,
+                note: note
+            };
+
+            if (editIndex !== null) {
+                records[editIndex] = record;
+                editIndex = null;
+            } else {
+                records.push(record);
+            }
+
+            set(ref(db, 'biz_records'), records).then(() => {
+                clearForm();
+                switchView('database-view');
+            }).catch((err) => alert("Cloud Sync Failed: " + err.message));
         }
 
         function clearForm() {
@@ -774,116 +790,136 @@
             document.getElementById('entry-lkr-3').value = '';
             document.getElementById('entry-status').value = 'Yes';
             document.getElementById('entry-note').value = '';
-            setMode('deposit'); 
+            editIndex = null;
         }
 
-        // Database Table Compilation Core Engine
+        // Render Database Records View Window Engine 
         function renderDatabase() {
             const tbody = document.getElementById('database-body');
-            if(!tbody) return;
             tbody.innerHTML = '';
 
             records.forEach((r, idx) => {
-                appendRowToTable(tbody, r, idx);
+                const tr = document.createElement('tr');
+                let targetDestinations = [];
+                let formattedAmounts = [];
+
+                if(r.to1) { targetDestinations.push(r.to1); formattedAmounts.push(`${r.lkr1.toFixed(2)}`); }
+                if(r.to2) { targetDestinations.push(r.to2); formattedAmounts.push(`${r.lkr2.toFixed(2)}`); }
+                if(r.to3) { targetDestinations.push(r.to3); formattedAmounts.push(`${r.lkr3.toFixed(2)}`); }
+
+                let statusStyle = '';
+                if (r.status === 'Yes') statusStyle = 'status-yes';
+                if (r.status === 'Nayata') statusStyle = 'status-nayata';
+                if (r.status === 'Pending Deposit') statusStyle = 'status-p-deposit';
+                if (r.status === 'Pending Withdrawal') statusStyle = 'status-p-withdrawal';
+
+                tr.innerHTML = `
+                    <td>${r.date || ''}</td>
+                    <td><strong>${r.name || ''}</strong></td>
+                    <td style="text-transform: capitalize;">${r.from || ''} <br><small style="color:#7f8c8d;">(${r.type})</small></td>
+                    <td style="text-transform: capitalize;">${targetDestinations.join('<br>')}</td>
+                    <td>${formattedAmounts.join('<br>')}</td>
+                    <td><span style="padding: 5px 10px; border-radius: 4px;" class="${statusStyle}">${r.status}</span></td>
+                    <td>${r.note || ''}</td>
+                    <td>
+                        <button onclick="editRecord(${idx})" style="padding:5px 8px; background:#f39c12; color:white; border:none; border-radius:4px; cursor:pointer;">Edit</button>
+                        <button onclick="deleteRecord(${idx})" style="padding:5px 8px; background:#e74c3c; color:white; border:none; border-radius:4px; cursor:pointer; margin-left:2px;">Del</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
             });
-            calculateLiveNavbarVariance();
         }
 
-        function appendRowToTable(tbody, r, idx) {
-            let statusClass = '';
-            if (r.status === 'Yes') statusClass = 'status-yes';
-            if (r.status === 'Nayata') statusClass = 'status-nayata';
-            if (r.status === 'Pending Deposit') statusClass = 'status-p-deposit';
-            if (r.status === 'Pending Withdrawal') statusClass = 'status-p-withdrawal';
+        function editRecord(idx) {
+            const r = records[idx];
+            editIndex = idx;
+            switchView('entry-view');
+            setMode(r.type);
 
-            let toDetails = [];
-            let lkrDetails = [];
-            
-            if (r.to1 || r.lkr1) { toDetails.push(`1. ${r.to1 || '-'}`); lkrDetails.push(`1. ${r.lkr1 || 0}`); }
-            if (r.to2 || r.lkr2) { toDetails.push(`2. ${r.to2 || '-'}`); lkrDetails.push(`2. ${r.lkr2 || 0}`); }
-            if (r.to3 || r.lkr3) { toDetails.push(`3. ${r.to3 || '-'}`); lkrDetails.push(`3. ${r.lkr3 || 0}`); }
-
-            let tr = document.createElement('tr');
-            tr.className = statusClass;
-            tr.innerHTML = `
-                <td>${r.timestamp}</td>
-                <td>${r.name || '-'}</td>
-                <td>${r.from || '-'}</td>
-                <td>${toDetails.join('<br>') || '-'}</td>
-                <td>${lkrDetails.join('<br>') || '-'}</td>
-                <td>${r.status}</td>
-                <td>${r.note || '-'}</td>
-                <td>
-                    <button onclick="editRecord(${idx})" style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Edit</button>
-                    <button onclick="deleteRecord(${idx})" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; margin-top: 5px;">Del</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
+            document.getElementById('entry-name').value = r.name || '';
+            document.getElementById('entry-from').value = r.from || '';
+            document.getElementById('entry-to-1').value = r.to1 || '';
+            document.getElementById('entry-lkr-1').value = r.lkr1 || '';
+            document.getElementById('entry-to-2').value = r.to2 || '';
+            document.getElementById('entry-lkr-2').value = r.lkr2 || '';
+            document.getElementById('entry-to-3').value = r.to3 || '';
+            document.getElementById('entry-lkr-3').value = r.lkr3 || '';
+            document.getElementById('entry-status').value = r.status || 'Yes';
+            document.getElementById('entry-note').value = r.note || '';
         }
 
-        // Individualized Ledger Filtration Query Function
+        function deleteRecord(idx) {
+            if(confirm("Are you certain you want to permanently delete this record?")) {
+                records.splice(idx, 1);
+                set(ref(db, 'biz_records'), records);
+            }
+        }
+
+        // Live Filtering & Individual Dynamic Ledger Generation Engine
         function filterDatabaseBySearch() {
-            const query = document.getElementById('db-search-input').value.trim().toLowerCase();
+            const val = document.getElementById('db-search-input').value.trim().toLowerCase();
             const tbody = document.getElementById('database-body');
-            const ledgerBox = document.getElementById('personal-ledger-box');
-            
-            if (!query) {
-                renderDatabase();
-                ledgerBox.style.display = 'none';
+            const rows = tbody.getElementsByTagName('tr');
+
+            if (!val) {
+                document.getElementById('personal-ledger-box').style.display = 'none';
+                for (let i = 0; i < rows.length; i++) rows[i].style.display = '';
                 return;
             }
 
-            tbody.innerHTML = '';
-            ledgerBox.style.display = 'block';
-
-            let depositTotal = 0;
-            let withdrawalTotal = 0;
-            let statusNayataSum = 0;
-            let statusPDepSum = 0;
-            let statusPWitSum = 0;
-
-            const depositListEl = document.getElementById('ledger-deposit-list');
-            const withdrawalListEl = document.getElementById('ledger-withdrawal-list');
-            depositListEl.innerHTML = '';
-            withdrawalListEl.innerHTML = '';
+            let depList = '', witList = '';
+            let depTotal = 0, witTotal = 0;
+            let nayaSum = 0, pDepSum = 0, pWitSum = 0;
+            let currentTargetName = '';
 
             records.forEach((r, idx) => {
-                if ((r.name && r.name.toLowerCase().includes(query))) {
-                    appendRowToTable(tbody, r, idx);
+                // Multi-Field Global search: matches Name, From, To accounts, LKR amounts, Status and Notes
+                const nameMatch = r.name && r.name.toLowerCase().includes(val);
+                const fromMatch = r.from && r.from.toLowerCase().includes(val);
+                const to1Match = r.to1 && r.to1.toLowerCase().includes(val);
+                const to2Match = r.to2 && r.to2.toLowerCase().includes(val);
+                const to3Match = r.to3 && r.to3.toLowerCase().includes(val);
+                const lkr1Match = r.lkr1 && String(r.lkr1).includes(val);
+                const lkr2Match = r.lkr2 && String(r.lkr2).includes(val);
+                const lkr3Match = r.lkr3 && String(r.lkr3).includes(val);
+                const noteMatch = r.note && r.note.toLowerCase().includes(val);
+                const statusMatch = r.status && r.status.toLowerCase().includes(val);
 
-                    let am1 = parseFloat(r.lkr1) || 0;
-                    let am2 = parseFloat(r.lkr2) || 0;
-                    let am3 = parseFloat(r.lkr3) || 0;
-                    let rowSum = am1 + am2 + am3;
+                const targetMatch = nameMatch || fromMatch || to1Match || to2Match || to3Match || lkr1Match || lkr2Match || lkr3Match || noteMatch || statusMatch;
+                
+                if(rows[idx]) rows[idx].style.display = targetMatch ? '' : 'none';
 
-                    // Group entries by transaction mode context
-                    if (r.mode === 'withdrawal') {
-                        withdrawalTotal += rowSum;
-                        let item = document.createElement('div');
-                        item.innerText = `${r.timestamp} -> ${rowSum.toFixed(2)} LKR`;
-                        withdrawalListEl.appendChild(item);
+                if(targetMatch) {
+                    if(!currentTargetName) currentTargetName = r.name;
+                    const combinedRowSum = (r.lkr1 || 0) + (r.lkr2 || 0) + (r.lkr3 || 0);
+
+                    if(r.type === 'deposit') {
+                        depTotal += combinedRowSum;
+                        depList += `<div>• ${r.date.split(',')[0]} ➔ ${combinedRowSum.toFixed(2)} LKR</div>`;
                     } else {
-                        depositTotal += rowSum;
-                        let item = document.createElement('div');
-                        item.innerText = `${r.timestamp} -> ${rowSum.toFixed(2)} LKR`;
-                        depositListEl.appendChild(item);
+                        witTotal += combinedRowSum;
+                        witList += `<div>• ${r.date.split(',')[0]} ➔ ${combinedRowSum.toFixed(2)} LKR</div>`;
                     }
 
-                    // Accumulate status summaries for this person
-                    if (r.status === 'Nayata') statusNayataSum += rowSum;
-                    if (r.status === 'Pending Deposit') statusPDepSum += rowSum;
-                    if (r.status === 'Pending Withdrawal') statusPWitSum += rowSum;
+                    if(r.status === 'Nayata') nayaSum += combinedRowSum;
+                    if(r.status === 'Pending Deposit') pDepSum += combinedRowSum;
+                    if(r.status === 'Pending Withdrawal') pWitSum += combinedRowSum;
                 }
             });
 
-            if(depositListEl.innerHTML === '') depositListEl.innerText = 'No deposit records';
-            if(withdrawalListEl.innerHTML === '') withdrawalListEl.innerText = 'No withdrawal records';
-
-            document.getElementById('ledger-deposit-total').innerText = depositTotal.toFixed(2);
-            document.getElementById('ledger-withdrawal-total').innerText = withdrawalTotal.toFixed(2);
-            document.getElementById('ledger-nayata-sum').innerText = statusNayataSum.toFixed(2);
-            document.getElementById('ledger-pdep-sum').innerText = statusPDepSum.toFixed(2);
-            document.getElementById('ledger-pwit-sum').innerText = statusPWitSum.toFixed(2);
+            if (currentTargetName) {
+                document.getElementById('ledger-title').innerText = `Personal Financial Summary: ${currentTargetName}`;
+                document.getElementById('ledger-deposit-list').innerHTML = depList || 'No deposits linked.';
+                document.getElementById('ledger-deposit-total').innerText = depTotal.toFixed(2);
+                document.getElementById('ledger-withdrawal-list').innerHTML = witList || 'No withdrawals linked.';
+                document.getElementById('ledger-withdrawal-total').innerText = witTotal.toFixed(2);
+                document.getElementById('ledger-nayata-sum').innerText = nayaSum.toFixed(2);
+                document.getElementById('ledger-pdep-sum').innerText = pDepSum.toFixed(2);
+                document.getElementById('ledger-pwit-sum').innerText = pWitSum.toFixed(2);
+                document.getElementById('personal-ledger-box').style.display = 'block';
+            } else {
+                document.getElementById('personal-ledger-box').style.display = 'none';
+            }
         }
 
         function clearSearchFilter() {
@@ -892,92 +928,182 @@
             renderDatabase();
         }
 
-        function editRecord(idx) {
-            const r = records[idx];
-            editIndex = idx;
+        // Live Balance Sheet Matrix Processor Engine
+        function renderBalances() {
+            let runningBalances = {};
+            fixedAccounts.forEach(acc => {
+                runningBalances[acc] = parseFloat(manualBalances[acc]) || 0;
+            });
 
-            document.getElementById('entry-name').value = r.name;
-            document.getElementById('entry-from').value = r.from;
-            document.getElementById('entry-to-1').value = r.to1;
-            document.getElementById('entry-lkr-1').value = r.lkr1 || '';
-            document.getElementById('entry-to-2').value = r.to2;
-            document.getElementById('entry-lkr-2').value = r.lkr2 || '';
-            document.getElementById('entry-to-3').value = r.to3;
-            document.getElementById('entry-lkr-3').value = r.lkr3 || '';
-            document.getElementById('entry-status').value = r.status;
-            document.getElementById('entry-note').value = r.note;
+            let globalNayata = 0;
+            let globalPendingDeposit = 0;
+            let globalPendingWithdrawal = 0;
 
-            if (r.mode) setMode(r.mode);
-            closeModal();
-            switchView('entry-view');
-        }
+            records.forEach(r => {
+                const a1 = r.lkr1 || 0, a2 = r.lkr2 || 0, a3 = r.lkr3 || 0;
+                const totalAmt = a1 + a2 + a3;
 
-        function deleteRecord(idx) {
-            if (confirm("Are you sure you want to delete this record?")) {
-                records.splice(idx, 1);
-                // Sync with Firebase Node
-                set(ref(db, 'biz_records'), records);
-                
-                if (document.getElementById('details-modal').style.display === 'flex' && currentOpenStatusType) {
-                    openDetails(currentOpenStatusType);
+                if (r.status === 'Nayata') globalNayata += totalAmt;
+                if (r.status === 'Pending Deposit') globalPendingDeposit += totalAmt;
+                if (r.status === 'Pending Withdrawal') globalPendingWithdrawal += totalAmt;
+
+                if (r.status === 'Yes') {
+                    const origin = (r.from || '').toLowerCase();
+                    const target1 = (r.to1 || '').toLowerCase();
+                    const target2 = (r.to2 || '').toLowerCase();
+                    const target3 = (r.to3 || '').toLowerCase();
+
+                    if (runningBalances[origin] !== undefined) runningBalances[origin] -= totalAmt;
+                    if (runningBalances[target1] !== undefined) runningBalances[target1] += a1;
+                    if (runningBalances[target2] !== undefined) runningBalances[target2] += a2;
+                    if (runningBalances[target3] !== undefined) runningBalances[target3] += a3;
                 }
-                renderDatabase();
-                if(document.getElementById('database-view').classList.contains('active-view')) {
-                    filterDatabaseBySearch();
+            });
+
+            const manualNayaBase = parseFloat(manualBalances['mulu naya']) || 0;
+            const compiledNayaTotal = globalNayata + manualNayaBase;
+
+            document.getElementById('total-nayata').innerText = `${compiledNayaTotal.toFixed(2)} LKR`;
+            document.getElementById('manual-naya').value = manualNayaBase || '';
+            document.getElementById('total-p-deposit').innerText = `${globalPendingDeposit.toFixed(2)} LKR`;
+            document.getElementById('total-p-withdrawal').innerText = `${globalPendingWithdrawal.toFixed(2)} LKR`;
+
+            const balancesGrid = document.getElementById('account-balances-grid');
+            balancesGrid.innerHTML = '';
+
+            let banksTotal = 0, bettingTotal = 0;
+
+            fixedAccounts.forEach(acc => {
+                if (acc === 'mulu naya') return;
+                const bal = runningBalances[acc] || 0;
+                const cleanBankMarker = bankAccounts.includes(acc);
+
+                if (cleanBankMarker) banksTotal += bal;
+                else if (bettingAccounts.includes(acc)) bettingTotal += bal;
+
+                const card = document.createElement('div');
+                card.className = `balance-card cursor-pointer ${bal >= 0 ? 'net-positive' : ''}`;
+                card.style.borderTopColor = cleanBankMarker ? 'var(--success)' : 'var(--orange)';
+                // Account cards click routing integration
+                card.innerHTML = `
+                    <div onclick="openDetails('${acc}')">
+                        <h5 style="text-transform: capitalize; margin:0 0 8px 0;">${acc} (Click Details)</h5>
+                        <h3 style="margin:0 0 12px 0;">${bal.toFixed(2)} LKR</h3>
+                    </div>
+                    <input type="number" placeholder="Base Set" value="${manualBalances[acc] || ''}" 
+                        onchange="updateManualBalance('${acc}', this.value)" 
+                        onclick="event.stopPropagation();"
+                        style="width:100%; padding:6px; font-size:12px; border:1px solid #ccc; border-radius:4px; box-sizing:border-box;">
+                `;
+                balancesGrid.appendChild(card);
+            });
+
+            document.getElementById('group-banks-total').innerText = `${banksTotal.toFixed(2)} LKR`;
+            document.getElementById('group-betting-total').innerText = `${bettingTotal.toFixed(2)} LKR`;
+
+            const netAccountsTotal = banksTotal + bettingTotal;
+            const netActualHandBalance = (netAccountsTotal + compiledNayaTotal) - globalPendingDeposit - globalPendingWithdrawal;
+            document.getElementById('actual-net-balance').innerText = `${netActualHandBalance.toFixed(2)} LKR`;
+
+            const varianceDisplayNode = document.getElementById('navbar-variance-panel');
+            if (varianceDisplayNode) {
+                const systemDiscrepancyVariance = netActualHandBalance - checkpointBalance;
+                if(Math.abs(systemDiscrepancyVariance) < 0.01) {
+                    varianceDisplayNode.innerHTML = `<span style="color:var(--success)">✓ System Balanced</span>`;
+                } else if (systemDiscrepancyVariance > 0) {
+                    varianceDisplayNode.innerHTML = `<span style="color:var(--warning)">⚠️ Variance Surplus: +${systemDiscrepancyVariance.toFixed(2)} LKR</span>`;
+                } else {
+                    varianceDisplayNode.innerHTML = `<span style="color:var(--danger)">⚠️ Variance Deficit: ${systemDiscrepancyVariance.toFixed(2)} LKR</span>`;
                 }
             }
         }
 
-        function updateManualBalance(acc, val) {
-            manualBalances[acc.toLowerCase()] = parseFloat(val) || 0;
-            // Sync with Firebase Node
+        function saveManualCheckpoint() {
+            const val = parseFloat(document.getElementById('manual-checkpoint-input').value) || 0;
+            set(ref(db, 'biz_checkpoint_bal'), val).then(() => {
+                checkpointBalance = val;
+                renderBalances();
+            });
+        }
+
+        function updateManualBalance(account, val) {
+            manualBalances[account.toLowerCase()] = parseFloat(val) || 0;
             set(ref(db, 'biz_manual_bal'), manualBalances);
         }
 
-        // Live Manual Balance Checkpoint Committer Function
-        function saveManualCheckpoint() {
-            let val = parseFloat(document.getElementById('manual-checkpoint-input').value) || 0;
-            checkpointBalance = val;
-            // Sync with Firebase Node
-            set(ref(db, 'biz_checkpoint_bal'), checkpointBalance);
-            alert("Checkpoint Balance Set Reference Confirmed Successfully!");
-        }
-
-        // Interactive Live Status Sub-Table Compilation Grid Context Routing Modal
-        function openDetails(status) {
-            currentOpenStatusType = status;
-            document.getElementById('modal-title').innerText = status + " Details";
-            const tbody = document.getElementById('modal-body');
-            tbody.innerHTML = '';
+        // Modal Component Dynamic Injection Methods
+        function openDetails(statusType) {
+            currentOpenStatusType = statusType;
+            const modal = document.getElementById('details-modal');
+            const modalBody = document.getElementById('modal-body');
             
-            let count = 0;
+            // Check if it's a generic pending status type or a fixed bank/site account profile drill-down
+            const isGenericStatusProfile = ['Nayata', 'Pending Deposit', 'Pending Withdrawal'].includes(statusType);
+            
+            document.getElementById('modal-title').innerText = isGenericStatusProfile ? `${statusType} Breakdown Profile` : `${statusType.toUpperCase()} Account Ledger Logs`;
+            modalBody.innerHTML = '';
+            modal.style.display = 'flex';
+
             records.forEach((r, idx) => {
-                if (r.status === status) {
-                    count++;
-                    let am1 = parseFloat(r.lkr1) || 0;
-                    let am2 = parseFloat(r.lkr2) || 0;
-                    let am3 = parseFloat(r.lkr3) || 0;
-                    let totalRowLkr = am1 + am2 + am3;
+                let isMatchFound = false;
+                let calculatedDisplayAmount = 0;
+
+                if (isGenericStatusProfile) {
+                    if (r.status === statusType) {
+                        isMatchFound = true;
+                        calculatedDisplayAmount = (r.lkr1 || 0) + (r.lkr2 || 0) + (r.lkr3 || 0);
+                    }
+                } else {
+                    // Filter matching logs related to specific bank or betting account
+                    const checkAccName = statusType.toLowerCase();
+                    let accountSpecificSum = 0;
+                    let hasAccountInvolvement = false;
+
+                    if ((r.from || '').toLowerCase() === checkAccName) {
+                        hasAccountInvolvement = true;
+                        accountSpecificSum -= ((r.lkr1 || 0) + (r.lkr2 || 0) + (r.lkr3 || 0));
+                    }
+                    if ((r.to1 || '').toLowerCase() === checkAccName) { hasAccountInvolvement = true; accountSpecificSum += (r.lkr1 || 0); }
+                    if ((r.to2 || '').toLowerCase() === checkAccName) { hasAccountInvolvement = true; accountSpecificSum += (r.lkr2 || 0); }
+                    if ((r.to3 || '').toLowerCase() === checkAccName) { hasAccountInvolvement = true; accountSpecificSum += (r.lkr3 || 0); }
+
+                    if (hasAccountInvolvement) {
+                        isMatchFound = true;
+                        calculatedDisplayAmount = accountSpecificSum;
+                    }
+                }
+
+                if (isMatchFound) {
+                    const tr = document.createElement('tr');
+                    let actionHtmlBlock = '';
                     
-                    let tr = document.createElement('tr');
+                    if (isGenericStatusProfile) {
+                        actionHtmlBlock = `<div style="margin-bottom:6px;"><button onclick="clearStatusDirect(${idx})" style="padding:6px 12px; background:var(--success); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Approve (Yes)</button></div>`;
+                    } else {
+                        actionHtmlBlock = `<div style="font-size:12px; font-weight:bold; color:var(--primary); margin-bottom:6px;">Status: ${r.status}</div>`;
+                    }
+
+                    // Append Edit & Delete Buttons inline
+                    const editBtn = `<button onclick="editFromModal(${idx})" style="padding:5px 8px; background:#f39c12; color:white; border:none; border-radius:4px; cursor:pointer; margin-right:4px;">Edit</button>`;
+                    const delBtn = `<button onclick="deleteFromModal(${idx}, '${statusType}')" style="padding:5px 8px; background:#e74c3c; color:white; border:none; border-radius:4px; cursor:pointer;">Del</button>`;
+                    actionHtmlBlock += `<div>${editBtn}${delBtn}</div>`;
+
+                    const formattedAmountString = isGenericStatusProfile ? `${calculatedDisplayAmount.toFixed(2)} LKR` : `${calculatedDisplayAmount >= 0 ? '+' : ''}${calculatedDisplayAmount.toFixed(2)} LKR`;
+                    const dynamicAmountInlineStyle = !isGenericStatusProfile ? (calculatedDisplayAmount >= 0 ? 'color: var(--success); font-weight:bold;' : 'color: var(--danger); font-weight:bold;') : '';
+
                     tr.innerHTML = `
-                        <td>${r.timestamp}</td>
-                        <td>${r.name || '-'}</td>
-                        <td style="font-weight:bold;">${totalRowLkr.toFixed(2)} LKR</td>
-                        <td>
-                            <button onclick="editRecord(${idx})" style="background:#f39c12; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:12px;">Edit</button>
-                            <button onclick="deleteRecord(${idx})" style="background:#e74c3c; color:white; border:none; padding:3px 8px; border-radius:3px; cursor:pointer; font-size:12px; margin-left:3px;">Del</button>
-                        </td>
+                        <td>${r.date || ''}</td>
+                        <td><strong>${r.name || ''}</strong> <br><small style="text-transform:uppercase; color:#7f8c8d;">(${r.from} ➔ ${r.type})</small></td>
+                        <td style="${dynamicAmountInlineStyle}">${formattedAmountString}</td>
+                        <td>${actionHtmlBlock}</td>
                     `;
-                    tbody.appendChild(tr);
+                    modalBody.appendChild(tr);
                 }
             });
-            
-            if(count === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px;">No records found</td></tr>';
+
+            if (!modalBody.innerHTML) {
+                modalBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#95a5a6; padding:20px;">No transaction logs matched this query profile data.</td></tr>`;
             }
-            
-            document.getElementById('details-modal').style.display = 'flex';
         }
 
         function closeModal() {
@@ -985,203 +1111,46 @@
             currentOpenStatusType = null;
         }
 
-        // Calculations Engine: Compute Absolute Discrepancies and Render Colors
-        function calculateLiveNavbarVariance() {
-            let accounts = {};
-            let totalNayata = 0;
-            let totalPendingDeposit = 0;
-            let totalPendingWithdrawal = 0;
-
-            records.forEach(r => {
-                let am1 = parseFloat(r.lkr1) || 0;
-                let am2 = parseFloat(r.lkr2) || 0;
-                let am3 = parseFloat(r.lkr3) || 0;
-
-                if (r.from) accounts[r.from.toLowerCase()] = (accounts[r.from.toLowerCase()] || 0) + (am1 + am2 + am3);
-                if (r.to1) accounts[r.to1.toLowerCase()] = (accounts[r.to1.toLowerCase()] || 0) - am1;
-                if (r.to2) accounts[r.to2.toLowerCase()] = (accounts[r.to2.toLowerCase()] || 0) - am2;
-                if (r.to3) accounts[r.to3.toLowerCase()] = (accounts[r.to3.toLowerCase()] || 0) - am3;
-
-                if (r.status === 'Nayata') totalNayata += (am1 + am2 + am3);
-                if (r.status === 'Pending Deposit') totalPendingDeposit += (am1 + am2 + am3);
-                if (r.status === 'Pending Withdrawal') totalPendingWithdrawal += (am1 + am2 + am3);
+        function clearStatusDirect(idx) {
+            records[idx].status = 'Yes';
+            set(ref(db, 'biz_records'), records).then(() => {
+                if (currentOpenStatusType) openDetails(currentOpenStatusType);
             });
-
-            let totalAccountsSum = 0;
-            fixedAccounts.forEach(acc => {
-                let currentTotal = (accounts[acc] || 0) + (manualBalances[acc] || 0);
-                if(acc !== 'mulu naya') totalAccountsSum += currentTotal;
-            });
-
-            for (let acc in accounts) {
-                if(!fixedAccounts.includes(acc) && acc !== 'undefined' && acc !== '') {
-                    totalAccountsSum += accounts[acc];
-                }
-            }
-
-            let manualMuluNaya = manualBalances["mulu naya"] || 0;
-            let finalTotalNayata = totalNayata + manualMuluNaya;
-            totalAccountsSum += finalTotalNayata;
-
-            let actualNet = totalAccountsSum - totalPendingDeposit - totalPendingWithdrawal;
-            
-            let netVarianceValue = actualNet - checkpointBalance;
-            const varianceDisplayPanel = document.getElementById('navbar-variance-panel');
-            if(!varianceDisplayPanel) return actualNet;
-
-            if (netVarianceValue < 0) {
-                varianceDisplayPanel.style.color = '#ff4d4d'; 
-                varianceDisplayPanel.innerText = `Variance: ${netVarianceValue.toFixed(2)} LKR`;
-            } else {
-                varianceDisplayPanel.style.color = '#2ecc71'; 
-                varianceDisplayPanel.innerText = `Variance: +${netVarianceValue.toFixed(2)} LKR`;
-            }
-            return actualNet;
         }
 
-        // Live Balance Sheet Ledger Rendering Pipeline Execution Control
-        function renderBalances() {
-            let accounts = {};
-            let totalNayata = 0;
-            let totalPendingDeposit = 0;
-            let totalPendingWithdrawal = 0;
-
-            records.forEach(r => {
-                let am1 = parseFloat(r.lkr1) || 0;
-                let am2 = parseFloat(r.lkr2) || 0;
-                let am3 = parseFloat(r.lkr3) || 0;
-
-                if (r.from) accounts[r.from.toLowerCase()] = (accounts[r.from.toLowerCase()] || 0) + (am1 + am2 + am3);
-                if (r.to1) accounts[r.to1.toLowerCase()] = (accounts[r.to1.toLowerCase()] || 0) - am1;
-                if (r.to2) accounts[r.to2.toLowerCase()] = (accounts[r.to2.toLowerCase()] || 0) - am2;
-                if (r.to3) accounts[r.to3.toLowerCase()] = (accounts[r.to3.toLowerCase()] || 0) - am3;
-
-                if (r.status === 'Nayata') totalNayata += (am1 + am2 + am3);
-                if (r.status === 'Pending Deposit') totalPendingDeposit += (am1 + am2 + am3);
-                if (r.status === 'Pending Withdrawal') totalPendingWithdrawal += (am1 + am2 + am3);
-            });
-
-            const grid = document.getElementById('account-balances-grid');
-            if(!grid) return;
-            grid.innerHTML = '';
-            
-            let totalAccountsSum = 0;
-            let banksSumGroupTotal = 0;
-            let bettingSumGroupTotal = 0;
-
-            fixedAccounts.forEach(acc => {
-                if(acc === 'mulu naya') return;
-                let systemBal = accounts[acc] || 0;
-                let manualBal = manualBalances[acc] || 0;
-                let currentTotal = systemBal + manualBal;
-                totalAccountsSum += currentTotal;
-
-                if(bankAccounts.includes(acc)) banksSumGroupTotal += currentTotal;
-                if(bettingAccounts.includes(acc)) bettingSumGroupTotal += currentTotal;
-                
-                let card = document.createElement('div');
-                card.className = 'balance-card';
-                card.innerHTML = `
-                    <h5 style="margin-top:0;">${acc.toUpperCase()}</h5>
-                    <h3 style="margin: 10px 0;">${currentTotal.toFixed(2)} LKR</h3>
-                    <input type="number" placeholder="Manual Starting Balance" value="${manualBal || ''}" 
-                        onchange="updateManualBalance('${acc}', this.value)" 
-                        style="width:100%; padding:8px; font-size:13px; border:1px solid #ccc; border-radius:4px; margin-top:5px;">
-                `;
-                grid.appendChild(card);
-            });
-
-            for (let acc in accounts) {
-                if(!fixedAccounts.includes(acc) && acc !== 'undefined' && acc !== '') {
-                    let systemBal = accounts[acc];
-                    totalAccountsSum += systemBal;
-                    
-                    let card = document.createElement('div');
-                    card.className = 'balance-card';
-                    card.innerHTML = `<h5 style="margin-top:0;">${acc.toUpperCase()}</h5><h3 style="margin: 10px 0;">${systemBal.toFixed(2)} LKR</h3>`;
-                    grid.appendChild(card);
-                }
-            }
-
-            let manualMuluNaya = manualBalances["mulu naya"] || 0;
-            let finalTotalNayata = totalNayata + manualMuluNaya;
-            
-            const manualNayaInput = document.getElementById('manual-naya');
-            if(manualNayaInput) manualNayaInput.value = manualBalances["mulu naya"] || '';
-            
-            document.getElementById('total-nayata').innerText = `${finalTotalNayata.toFixed(2)} LKR`;
-            totalAccountsSum += finalTotalNayata;
-
-            document.getElementById('total-p-deposit').innerText = `${totalPendingDeposit.toFixed(2)} LKR`;
-            document.getElementById('total-p-withdrawal').innerText = `${totalPendingWithdrawal.toFixed(2)} LKR`;
-
-            let actualNet = totalAccountsSum - totalPendingDeposit - totalPendingWithdrawal;
-            document.getElementById('actual-net-balance').innerText = `${actualNet.toFixed(2)} LKR`;
-
-            document.getElementById('group-banks-total').innerText = `${banksSumGroupTotal.toFixed(2)} LKR`;
-            document.getElementById('group-betting-total').innerText = `${bettingSumGroupTotal.toFixed(2)} LKR`;
-
-            calculateLiveNavbarVariance();
+        // Functions to Handle Actions Directly from Modals
+        function editFromModal(idx) {
+            closeModal();
+            editRecord(idx);
         }
 
-        // Global Window Routing Context Configuration Mapping
+        function deleteFromModal(idx, statusType) {
+            if(confirm("Are you certain you want to permanently delete this record?")) {
+                records.splice(idx, 1);
+                set(ref(db, 'biz_records'), records).then(() => {
+                    openDetails(statusType); // Re-render modal to reflect changes
+                });
+            }
+        }
+
+        // Global Variable Mapping Context Routing
         window.setMode = setMode;
         window.login = login;
         window.logout = logout;
         window.switchView = switchView;
         window.showSuggestions = showSuggestions;
         window.saveData = saveData;
-        window.clearForm = clearForm;
-        window.renderDatabase = renderDatabase;
         window.filterDatabaseBySearch = filterDatabaseBySearch;
         window.clearSearchFilter = clearSearchFilter;
         window.editRecord = editRecord;
         window.deleteRecord = deleteRecord;
-        window.updateManualBalance = updateManualBalance;
         window.saveManualCheckpoint = saveManualCheckpoint;
+        window.updateManualBalance = updateManualBalance;
         window.openDetails = openDetails;
         window.closeModal = closeModal;
+        window.clearStatusDirect = clearStatusDirect;
+        window.editFromModal = editFromModal;
+        window.deleteFromModal = deleteFromModal;
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
